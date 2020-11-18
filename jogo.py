@@ -1,8 +1,27 @@
 import pygame
 import random
 from pygame.locals import *
+import numpy as np
+import pickle
+
+from pybrain3.tools.shortcuts import buildNetwork
+from pybrain3.datasets import SupervisedDataSet
+from pybrain3.supervised.trainers import BackpropTrainer
+from pybrain3.structure.modules import SoftmaxLayer
+from pybrain3.structure.modules import SigmoidLayer
+
+arquivo = open("arquivo.p", "rb")
+modelo_carregado = pickle.load(arquivo)
 
 pygame.init()#inicia o pygame
+
+#vetores para o dataset da rede neural
+Delta_Diferenca_X= []
+Delta_Diferenca_Y= []
+Valores_Y=[]
+contador = 0
+flag = False
+#----------------------------------
 
 #tela
 SCREEN_SIZE = 600, 500
@@ -47,7 +66,22 @@ def Nave_movimenta():
     direcao = pygame.key.get_pressed()
     if direcao[pygame.K_LEFT]:
         Nave[0] -= Nave_vel
-    if direcao[pygame.K_RIGHT]:
+        if contador == 20:
+            Valores_Y.append(-1)
+    elif direcao[pygame.K_RIGHT]:
+        Nave[0] += Nave_vel
+        if contador == 20:
+            Valores_Y.append(1)
+    else:
+        if contador == 20:
+            Valores_Y.append(0)
+    #flag = False
+
+def Nave_movimenta_AI():
+    dir = modelo_carregado.activate([Nave[0] - Asteroide[0] , Nave[1] - Asteroide[1]])
+    if dir < -0.5:
+        Nave[0] -= Nave_vel
+    elif dir > 0.5:
         Nave[0] += Nave_vel
 
 def colisao():
@@ -76,10 +110,40 @@ while True:
     score = (pygame.time.get_ticks()/1000) * 7.66 #7.66 é uma velocidade média em km/s da Estação Espacial Internacional
     if(colisao()):
         break
+
     Nave_movimenta()
+    #Nave_movimenta_AI()
+
     limites_nave()
     asteroide()
+    
+    #dataset
+    if(contador == 20):
+        Delta_Diferenca_X.append(Nave[0] - Asteroide[0])
+        Delta_Diferenca_Y.append(Nave[1] - Asteroide[1])
+        contador = 0
+        #flag = True
+    #flag = False
+    contador += 1
+
     atualiza_tela() #Deixar sempre em último
+
+#--prints para debuging----------
+print(Delta_Diferenca_X)
+print(Delta_Diferenca_Y)
+print(Valores_Y)
+print(len(Delta_Diferenca_X))
+print(len(Delta_Diferenca_Y))
+print(len(Valores_Y))
+#-------------------------------
+#salvando o dataset
+
+np.savetxt("Dataset_Delta_X.txt", Delta_Diferenca_X, fmt='%i')
+np.savetxt("Dataset_Delta_Y.txt", Delta_Diferenca_Y, fmt='%i')
+np.savetxt("Dataset_Y.txt", Valores_Y, fmt='%i')
+
+#print(modelo_carregado.activate([21 , 100]))
+#-------------------------------
 
 #tela final
 r = g = b =0
