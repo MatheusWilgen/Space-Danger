@@ -10,27 +10,21 @@ from pybrain3.supervised.trainers import BackpropTrainer
 from pybrain3.structure.modules import SoftmaxLayer
 from pybrain3.structure.modules import SigmoidLayer
 
-arquivo = open("arquivo.p", "rb")
+#Abre o objeto da rede neural treinado no programa "Rede_Neural.py"
+arquivo = open("arquivo.p1", "rb")
 modelo_carregado = pickle.load(arquivo)
+arquivo.close()
 
 pygame.init()#inicia o pygame
 
-#vetores para o dataset da rede neural
-Delta_Diferenca_X= []
-Delta_Diferenca_Y= []
-Valores_Y=[]
-contador = 0
-flag = False
-#----------------------------------
-
 #tela
-SCREEN_SIZE = 600, 500
+SCREEN_SIZE = [600, 500]
 font = pygame.font.Font('freesansbold.ttf', 12)
 
 #asteroide
 Asteroide = [1, 1]
 Asteroide_lataria = pygame.image.load('Imagens/Asteroide.png')
-Asteroide_vel = 5
+Asteroide_vel = 12
 Asteroide_mask = pygame.mask.from_surface(Asteroide_lataria)
 
 #nave
@@ -40,6 +34,19 @@ Nave_vel = 4
 score = 0
 Nave_mask = pygame.mask.from_surface(Nave_lataria)
 
+#vetores para o dataset da rede neural
+Posicao_nave_X = []
+Delta_Diferenca_X= []
+Delta_Diferenca_Y= []
+Valores_Y=[]
+CONTADOR = 0
+#Variaveis para Normalização do dataset
+MIN_X_Pos = 0
+MIN_X = -SCREEN_SIZE[0]
+MAX_X = SCREEN_SIZE[0]
+MIN_Y = Nave[1] - SCREEN_SIZE[1]
+MAX_Y = Nave[1] + Asteroide_lataria.get_height()
+#----------------------------------
 
 screen = pygame.display.set_mode(SCREEN_SIZE)
 pygame.display.set_caption("Space Danger")#titulo da janela do jogo
@@ -47,6 +54,37 @@ pygame.display.set_caption("Space Danger")#titulo da janela do jogo
 clock = pygame.time.Clock()
 
 #-----------------FUNÇÕES AUXILIARES--------------
+#funcao para normalizar os dados entre 0 e 1 para treinar na rede
+def normalize_vetor_X(x):
+    global MIN_X
+    global MAX_X
+    return [(x[n] - MIN_X) / (MAX_X - MIN_X) for n in range(len(x))]
+
+def normalize_vetor_X_Pos(x):
+    global MIN_X_Pos
+    global MAX_X
+    return [(x[n] - MIN_X_Pos) / (MAX_X - MIN_X_Pos) for n in range(len(x))]
+
+def normalize_vetor_Y(x):
+    global MIN_Y
+    global MAX_Y
+    return [(x[n] - MIN_Y) / (MAX_Y - MIN_Y) for n in range(len(x))]
+
+def normalize_x(x):
+    global MIN_X
+    global MAX_X
+    return (x - MIN_X) / (MAX_X - MIN_X)
+
+def normalize_x_pos(x):
+    global MIN_X_Pos
+    global MAX_X
+    return (x - MIN_X_Pos) / (MAX_X - MIN_X_Pos)
+
+def normalize_y(y):
+    global MIN_Y
+    global MAX_Y
+    return (y - MIN_Y) / (MAX_Y - MIN_Y)
+
 #Trata o comportamento da nave quando encosta nas bordas
 def limites_nave():
     if Nave[0] >= SCREEN_SIZE[0] - Nave_lataria.get_width():
@@ -59,27 +97,36 @@ def asteroide():
     Asteroide[1] = Asteroide[1] + Asteroide_vel
     if(Asteroide[1] >= SCREEN_SIZE[1]):
         Asteroide[1] = -Asteroide_lataria.get_height()
-        Asteroide[0] = random.randint(0,SCREEN_SIZE[0]-Asteroide_lataria.get_width()) 
+        #Asteroide[0] = random.randint(0,SCREEN_SIZE[0]-Asteroide_lataria.get_width())#para randomico
+        Asteroide[0] = Nave[0] - int(Asteroide_lataria.get_width()/2) + random.randint(-Nave_lataria.get_width(),Nave_lataria.get_width())
+
+def coletar_dados():
+    Posicao_nave_X.append(Nave[0])
+    Delta_Diferenca_X.append(Nave[0] - Asteroide[0])
+    Delta_Diferenca_Y.append(Nave[1] - Asteroide[1])
 
 #movimentação da nave
 def Nave_movimenta():
     direcao = pygame.key.get_pressed()
+    global CONTADOR
+    CONTADOR += 1
+    print(CONTADOR)
     if direcao[pygame.K_LEFT]:
         Nave[0] -= Nave_vel
-        if contador == 20:
-            Valores_Y.append(-1)
+        if CONTADOR > 10:
+            coletar_dados()
+            Valores_Y.append(0)
+            CONTADOR = 0
     elif direcao[pygame.K_RIGHT]:
         Nave[0] += Nave_vel
-        if contador == 20:
+        if CONTADOR > 10:
+            coletar_dados()
             Valores_Y.append(1)
-    else:
-        if contador == 20:
-            Valores_Y.append(0)
-    #flag = False
+            CONTADOR = 0
 
 def Nave_movimenta_AI():
-    dir = modelo_carregado.activate([Nave[0] - Asteroide[0] , Nave[1] - Asteroide[1]])
-    if dir < -0.5:
+    dir = modelo_carregado.activate([normalize_x_pos(Nave[0]) , normalize_x(Nave[0] - Asteroide[0]) , normalize_y(Nave[1] - Asteroide[1])])
+    if dir < 0.5:
         Nave[0] -= Nave_vel
     elif dir > 0.5:
         Nave[0] += Nave_vel
@@ -111,38 +158,38 @@ while True:
     if(colisao()):
         break
 
-    Nave_movimenta()
-    #Nave_movimenta_AI()
+    #Nave_movimenta()
+    Nave_movimenta_AI()
 
     limites_nave()
     asteroide()
-    
-    #dataset
-    if(contador == 20):
-        Delta_Diferenca_X.append(Nave[0] - Asteroide[0])
-        Delta_Diferenca_Y.append(Nave[1] - Asteroide[1])
-        contador = 0
-        #flag = True
-    #flag = False
-    contador += 1
 
     atualiza_tela() #Deixar sempre em último
 
 #--prints para debuging----------
+print(Posicao_nave_X)
+Posicao_nave_X = normalize_vetor_X_Pos(Posicao_nave_X)
+print(Posicao_nave_X)
 print(Delta_Diferenca_X)
+Delta_Diferenca_X = normalize_vetor_X(Delta_Diferenca_X)
+print(Delta_Diferenca_X)
+print(Delta_Diferenca_Y)
+Delta_Diferenca_Y = normalize_vetor_Y(Delta_Diferenca_Y)
 print(Delta_Diferenca_Y)
 print(Valores_Y)
 print(len(Delta_Diferenca_X))
 print(len(Delta_Diferenca_Y))
 print(len(Valores_Y))
+
 #-------------------------------
-#salvando o dataset
+#salvando o dataset - descomente para gerar outro dataset
+"""
+np.savetxt("Dataset_Posicao_X.txt", Posicao_nave_X)
+np.savetxt("Dataset_Delta_X.txt", Delta_Diferenca_X)
+np.savetxt("Dataset_Delta_Y.txt", Delta_Diferenca_Y)
+np.savetxt("Dataset_Y.txt", Valores_Y)
+"""
 
-np.savetxt("Dataset_Delta_X.txt", Delta_Diferenca_X, fmt='%i')
-np.savetxt("Dataset_Delta_Y.txt", Delta_Diferenca_Y, fmt='%i')
-np.savetxt("Dataset_Y.txt", Valores_Y, fmt='%i')
-
-#print(modelo_carregado.activate([21 , 100]))
 #-------------------------------
 
 #tela final
